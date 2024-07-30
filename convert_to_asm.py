@@ -205,8 +205,10 @@ for i in range(len(module.instruments)):
     #vol = [0xFF,0xFF]
     vol = [0x0F,0xFF,0xFF]
 
+    insChipType = 0
     if module.instruments[i].meta.type == InstrumentType.FDS:
         vol = [0x20,0xFF,0xFF]
+        insChipType = 1
 
     duty = [0xFF,0xFF]
     macros = []
@@ -269,7 +271,7 @@ for i in range(len(module.instruments)):
             hasRelTotal[1] = 1
             arp.append(0xFF)
             arp.append(loop)
-        if kind == MacroCode.DUTY:
+        if kind == MacroCode.DUTY and insChipType == 0:
             s = j.speed
             duty = []
             loop = 0xff
@@ -291,7 +293,7 @@ for i in range(len(module.instruments)):
             hasRelTotal[2] = 1
             duty.append(0xFF)
             duty.append(loop)
-        if kind == MacroCode.WAVE:
+        if kind == MacroCode.WAVE and insChipType == 1:
             s = j.speed
             duty = []
             loop = 0xff
