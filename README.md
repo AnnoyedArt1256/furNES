@@ -11,7 +11,7 @@ Yes, this is real, but you can't just drop in any .fur file with the NES chip en
 
 * This only supports 2A03 and FDS (which can be enabled through a flag in the driver source). Also this only supports DPCM samples, so that means that there will be no 7-bit PCM samples :/
 
-* The driver only supports **arpeggio, volume and duty/waveform** macros in each instrument
+* The driver only supports **arpeggio, volume and duty/waveform** macros in each instrument and it **DOESN'T support LFO and ADSR macros nor delay and step length**
 
 * The furNES driver only supports these effects:
   * 01xx: pitch slide up
