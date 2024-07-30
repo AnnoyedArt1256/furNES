@@ -604,6 +604,7 @@ skip2:
   lda #$ff
   sta absarp+ch
   inc mframeA+ch
+  inc mframeA+ch
 end:
 .endmacro
 

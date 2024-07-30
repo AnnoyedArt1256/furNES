@@ -87,7 +87,7 @@ def conv_pattern(pattern):
             if k[0] == 0x03 and k[1] == 0:
                 temp.extend([0xFD, 0x02, 0, 7])
                 continue
-            if k[0] == 0x03 and k[1] >= 0:
+            if k[0] == 0x03 and k[1] > 0:
                 temp.extend([0xFD, 0x03, k[1], max(min(notes.index(str(row.note))+(row.octave*12),127),0)])
                 continue
             if k[0] == 0x04:
@@ -120,11 +120,11 @@ def conv_pattern(pattern):
             out.append(0)
         oldtemp = temp
         if has0Dxx > -1:
-            out[-1] += 1 
+            out[-1] += 1
             out.extend([0xFF, has0Dxx])
-            return out    
-        out[-1] += 1 
-        r += 1      
+            return out
+        out[-1] += 1
+        r += 1
     out.extend([0xFF, 0])
     return out
 
@@ -146,51 +146,51 @@ elif speed_type == 2:
 f.write("insVL:\n")
 f.write(".lobytes ")
 for i in range(len(module.instruments)):
-    f.write("ins"+str(i)+"V") 
+    f.write("ins"+str(i)+"V")
     if i == len(module.instruments)-1:
-        f.write("\n")  
+        f.write("\n")
     else:
         f.write(", ")
 f.write("insVH:\n")
 f.write(".hibytes ")
 for i in range(len(module.instruments)):
-    f.write("ins"+str(i)+"V") 
+    f.write("ins"+str(i)+"V")
     if i == len(module.instruments)-1:
-        f.write("\n")  
+        f.write("\n")
     else:
         f.write(", ")
 
 f.write("insAL:\n")
 f.write(".lobytes ")
 for i in range(len(module.instruments)):
-    f.write("ins"+str(i)+"A") 
+    f.write("ins"+str(i)+"A")
     if i == len(module.instruments)-1:
-        f.write("\n")  
+        f.write("\n")
     else:
         f.write(", ")
 f.write("insAH:\n")
 f.write(".hibytes ")
 for i in range(len(module.instruments)):
-    f.write("ins"+str(i)+"A") 
+    f.write("ins"+str(i)+"A")
     if i == len(module.instruments)-1:
-        f.write("\n")  
+        f.write("\n")
     else:
         f.write(", ")
 
 f.write("insDL:\n")
 f.write(".lobytes ")
 for i in range(len(module.instruments)):
-    f.write("ins"+str(i)+"D") 
+    f.write("ins"+str(i)+"D")
     if i == len(module.instruments)-1:
-        f.write("\n")  
+        f.write("\n")
     else:
         f.write(", ")
 f.write("insDH:\n")
 f.write(".hibytes ")
 for i in range(len(module.instruments)):
-    f.write("ins"+str(i)+"D") 
+    f.write("ins"+str(i)+"D")
     if i == len(module.instruments)-1:
-        f.write("\n")  
+        f.write("\n")
     else:
         f.write(", ")
 
@@ -324,55 +324,55 @@ for i in range(len(module.instruments)):
     duty = str(duty)[1:-1]
     arp = str(arp)[1:-1]
     f.write("ins"+str(i)+"V:\n")
-    f.write(".byte "+vol+"\n") 
+    f.write(".byte "+vol+"\n")
     f.write("ins"+str(i)+"A:\n")
-    f.write(".byte "+arp+"\n") 
+    f.write(".byte "+arp+"\n")
     f.write("ins"+str(i)+"D:\n")
-    f.write(".byte "+duty+"\n") 
+    f.write(".byte "+duty+"\n")
 
 
 relV = str(relV)[1:-1]
 relD = str(relD)[1:-1]
 relA = str(relA)[1:-1]
 f.write("insVrel:\n")
-f.write(".byte "+relV+"\n") 
+f.write(".byte "+relV+"\n")
 f.write("insArel:\n")
-f.write(".byte "+relA+"\n") 
+f.write(".byte "+relA+"\n")
 f.write("insDrel:\n")
-f.write(".byte "+relD+"\n") 
+f.write(".byte "+relD+"\n")
 
 for i in range(module.get_num_channels()):
     order = module.subsongs[subsong].order[i]
-    f.write("order"+str(i)+"len = "+str(len(order))+"\n") 
-    f.write("order"+str(i)+"L:\n") 
+    f.write("order"+str(i)+"len = "+str(len(order))+"\n")
+    f.write("order"+str(i)+"L:\n")
     f.write(".byte ")
     for o in range(len(order)):
-        f.write("<(patCH"+str(i)+"N"+str(order[o])+"-1)") 
+        f.write("<(patCH"+str(i)+"N"+str(order[o])+"-1)")
         if o == len(order)-1:
-            f.write("\n")  
+            f.write("\n")
         else:
             f.write(", ")
     f.write("order"+str(i)+"H:\n")
     f.write(".byte ")
     for o in range(len(order)):
-        f.write("(>(patCH"+str(i)+"N"+str(order[o])+"-1)&15)") 
+        f.write("(>(patCH"+str(i)+"N"+str(order[o])+"-1)&15)")
         if o == len(order)-1:
-            f.write("\n")  
+            f.write("\n")
         else:
             f.write(", ")
     f.write("order"+str(i)+"B:\n")
     f.write(".byte ")
     for o in range(len(order)):
-        f.write("(>(patCH"+str(i)+"N"+str(order[o])+"-1)>>4)|") 
-        f.write("(^(patCH"+str(i)+"N"+str(order[o])+"-1)<<4&240)&255") 
+        f.write("(>(patCH"+str(i)+"N"+str(order[o])+"-1)>>4)|")
+        f.write("(^(patCH"+str(i)+"N"+str(order[o])+"-1)<<4&240)&255")
         if o == len(order)-1:
-            f.write("\n")  
+            f.write("\n")
         else:
             f.write(", ")
 
 if len(module.wavetables) > 0:
     for i in range(len(module.wavetables)):
-        f.write("wavtbl"+str(i)+":\n")  
+        f.write("wavtbl"+str(i)+":\n")
         data = module.wavetables[i].data
         wav = []
         for j in range(64):
@@ -455,34 +455,34 @@ for i in range(len(module.instruments)):
 f.write("insDPCMIL:\n")
 f.write(".lobytes ")
 for i in range(len(module.instruments)):
-    f.write("ins"+str(i)+"DI") 
+    f.write("ins"+str(i)+"DI")
     if i == len(module.instruments)-1:
-        f.write("\n")  
+        f.write("\n")
     else:
         f.write(", ")
 f.write("insDPCMIH:\n")
 f.write(".hibytes ")
 for i in range(len(module.instruments)):
-    f.write("ins"+str(i)+"DI") 
+    f.write("ins"+str(i)+"DI")
     if i == len(module.instruments)-1:
-        f.write("\n")  
+        f.write("\n")
     else:
         f.write(", ")
 
 f.write("insDPCMPL:\n")
 f.write(".lobytes ")
 for i in range(len(module.instruments)):
-    f.write("ins"+str(i)+"DP") 
+    f.write("ins"+str(i)+"DP")
     if i == len(module.instruments)-1:
-        f.write("\n")  
+        f.write("\n")
     else:
         f.write(", ")
 f.write("insDPCMPH:\n")
 f.write(".hibytes ")
 for i in range(len(module.instruments)):
-    f.write("ins"+str(i)+"DP") 
+    f.write("ins"+str(i)+"DP")
     if i == len(module.instruments)-1:
-        f.write("\n")  
+        f.write("\n")
     else:
         f.write(", ")
 
@@ -490,9 +490,9 @@ f.write("sampleA:\n")
 if len(module.samples) > 0:
     f.write(".byte ")
     for o in range(len(module.samples)):
-        f.write("(DPCM"+str(o)+"&8191)>>6") 
+        f.write("(DPCM"+str(o)+"&8191)>>6")
         if o == len(module.samples)-1:
-            f.write("\n")  
+            f.write("\n")
         else:
             f.write(", ")
 
@@ -500,10 +500,10 @@ f.write("sampleB:\n")
 if len(module.samples) > 0:
     f.write(".byte ")
     for o in range(len(module.samples)):
-        f.write("(>(DPCM"+str(o)+")>>5)|") 
-        f.write("(^(DPCM"+str(o)+")<<3&248)&255") 
+        f.write("(>(DPCM"+str(o)+")>>5)|")
+        f.write("(^(DPCM"+str(o)+")<<3&248)&255")
         if o == len(module.samples)-1:
-            f.write("\n")  
+            f.write("\n")
         else:
             f.write(", ")
 
@@ -514,12 +514,12 @@ if len(module.samples) > 0:
     for o in range(len(module.samples)):
         sample = [int(i) for i in list(module.samples[o].data)]
         if len(sample) == 0:
-           sample.extend([0x55]*64) 
+           sample.extend([0x55]*64)
         while (len(sample)%64) != 0:
             sample.append(0x55)
-        f.write(str(max((len(sample)-1)>>4,1))) 
+        f.write(str(max((len(sample)-1)>>4,1)))
         if o == len(module.samples)-1:
-            f.write("\n")  
+            f.write("\n")
         else:
             f.write(", ")
 
@@ -548,7 +548,7 @@ sample_memory = 0
 for i in range(len(module.samples)):
     sample = [int(j) for j in list(module.samples[i].data)]
     if len(sample) == 0:
-        sample.extend([0x55]*64) 
+        sample.extend([0x55]*64)
     while (len(sample)%64) != 0:
         sample.append(0x55)
     if 8191-(sample_memory+len(sample)) < 256:
@@ -556,14 +556,14 @@ for i in range(len(module.samples)):
             raise Exception("DPCM sample is too big to fit in one bank")
         elif 8191-(sample_memory+len(sample)) < 8:
             f.write(".res "+str(8192-sample_memory)+", 0\n")
-            f.write("DPCM"+str(i)+":\n.byte "+str(sample)[1:-1]+"\n") 
+            f.write("DPCM"+str(i)+":\n.byte "+str(sample)[1:-1]+"\n")
             sample_memory = len(sample)
         else:
-            f.write("DPCM"+str(i)+":\n.byte "+str(sample)[1:-1]+"\n") 
+            f.write("DPCM"+str(i)+":\n.byte "+str(sample)[1:-1]+"\n")
             sample_memory += len(sample)
             f.write(".res "+str(8192-sample_memory)+", 0\n")
             sample_memory = 0
     else:
         sample_memory += len(sample)
-        f.write("DPCM"+str(i)+":\n.byte "+str(sample)[1:-1]+"\n")  
+        f.write("DPCM"+str(i)+":\n.byte "+str(sample)[1:-1]+"\n")
 f.close()
