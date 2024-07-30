@@ -16,7 +16,7 @@
 	 .byte str,0
 	 .res 31-.strlen(str)
 	.endmacro
-	
+
 	.byte "NESM",$1a
 	.byte 1     ; version
 	.byte 1    ; number of songs
@@ -696,9 +696,9 @@ doFinepitch:
   lda vibrato_param, x
   and #$0f
   tay
-  lda tri_vibrato_lo, y 
-  sta patzp  
-  lda tri_vibrato_hi, y 
+  lda tri_vibrato_lo, y
+  sta patzp
+  lda tri_vibrato_hi, y
   sta patzp+1
 
   lda vibrato_param, x
@@ -777,7 +777,7 @@ do_dpcm:
   cmp #$ff
   bne dpcm_map_skip
   lda note_n+4
-  sta macroIns+1  
+  sta macroIns+1
   lda insDPCMIL, x
   sta patzp
   lda insDPCMIH, x
@@ -785,7 +785,7 @@ do_dpcm:
   ldy #0
   lda (patzp), y
   sta macroIns
-  jmp dpcm_map_skip_end 
+  jmp dpcm_map_skip_end
 dpcm_map_skip:
   ldy note_n+4
   lda (patzp), y
@@ -837,7 +837,7 @@ dpcm_map_skip_end:
   sta $4015
   rts
 
-.proc playaddr	
+.proc playaddr
   ldx tick_sel
   inc tick
   lda tick
@@ -917,7 +917,6 @@ vol_add_loop:
   bcc vol_add_loop_end
   lda #$0f
   sta vol, x
-doFinepitch
 vol_add_loop_end:
   dex
   bpl vol_add_loop
@@ -1045,7 +1044,7 @@ positive_slide:
 finish_slide:
   lda note_dest, x
   sta note_n, x
-  lda #0 
+  lda #0
   sta slide_buffer_lo, x
   sta slide_buffer_hi, x
   sta slide_amt, x
@@ -1156,7 +1155,7 @@ positive_slide_fds:
 finish_slide_fds:
   lda note_dest+FDS_CHANNEL
   sta note_n+FDS_CHANNEL
-  lda #0 
+  lda #0
   sta slide_buffer_lo+FDS_CHANNEL
   sta slide_buffer_hi+FDS_CHANNEL
   sta slide_amt+FDS_CHANNEL
@@ -1188,7 +1187,7 @@ slide_loop_fds:
   lda #$30
   ora dutytbl, x
   ldx isoff
-  bne :+ 
+  bne :+
   ora volout
 :
   sta $4000
@@ -1211,7 +1210,7 @@ slide_loop_fds:
   lda #$30
   ora dutytbl, x
   ldx isoff+1
-  bne :+ 
+  bne :+
   ora volout+1
 :
   sta $4004
@@ -1246,7 +1245,7 @@ slide_loop_fds:
 
   lda #$30
   ldx isoff+3
-  bne :+ 
+  bne :+
   ora volout+3
 :
   sta $400C
@@ -1334,13 +1333,13 @@ set_patseq:
   ldx patind
 
   .repeat chnum, I
-    lda .ident(.concat ("order", .sprintf("%d",I), "L")), x 
+    lda .ident(.concat ("order", .sprintf("%d",I), "L")), x
     sta patseq+0+2*I
-    lda .ident(.concat ("order", .sprintf("%d",I), "H")), x 
+    lda .ident(.concat ("order", .sprintf("%d",I), "H")), x
     clc
     adc #$b0
     sta patseq+1+2*I
-    lda .ident(.concat ("order", .sprintf("%d",I), "B")), x 
+    lda .ident(.concat ("order", .sprintf("%d",I), "B")), x
     clc
     adc #1
     sta patbank+I
@@ -1352,13 +1351,13 @@ set_patseq:
 set_patseq_init:
   .repeat chnum, I
     ldx patind
-    lda .ident(.concat ("order", .sprintf("%d",I), "L")), x 
+    lda .ident(.concat ("order", .sprintf("%d",I), "L")), x
     sta patseq+0+2*I
-    lda .ident(.concat ("order", .sprintf("%d",I), "H")), x 
+    lda .ident(.concat ("order", .sprintf("%d",I), "H")), x
     clc
     adc #$b0
     sta patseq+1+2*I
-    lda .ident(.concat ("order", .sprintf("%d",I), "B")), x 
+    lda .ident(.concat ("order", .sprintf("%d",I), "B")), x
     clc
     adc #1
     sta patbank+I
