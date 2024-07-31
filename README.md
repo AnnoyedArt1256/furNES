@@ -22,6 +22,7 @@ Yes, this is real, but you can't just drop in any .fur file with the NES chip en
   * 0Dxx: jump to next pattern
   * 0Fxx: set speed 2
   * 0Axx: volume slide
+  * 11xx: write to delta counter
   * 12xx: set duty
   * E1xx: note slide up
   * E2xx: note slide down
