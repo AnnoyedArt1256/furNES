@@ -19,6 +19,7 @@ Yes, this is real, but you can't just drop in any .fur file with the NES chip en
   * 03xx: portamento
   * 04xx: vibrato
   * 09xx: set speed 1
+  * 0Dxx: jump to next pattern
   * 0Fxx: set speed 2
   * 0Axx: volume slide
   * 11xx: set duty
@@ -26,6 +27,7 @@ Yes, this is real, but you can't just drop in any .fur file with the NES chip en
   * E2xx: note slide down
   * E5xx: note fine-pitch
   * ECxx: note cut
+  * EDxx: note delay
 
 when you've finished / want to test out this driver:
 * open the terminal/command prompt **to the furNES directory**
