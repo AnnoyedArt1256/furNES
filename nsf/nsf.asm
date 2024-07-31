@@ -1,7 +1,8 @@
 ;;; cl65 -d -vm -l nsf.lst -g -t nes -C nsf.cfg -m nsf.map -Ln nsf.lbl -o driar.nsf nsf.asm
 
-.define FDS_SUPPORT 1
-.define chnum 6
+.define FDS_SUPPORT 0
+.define chnum 5
+.define loop_pattern_num 0
 
 .if FDS_SUPPORT = 1
   .define FDS_CHANNEL 5
@@ -87,8 +88,8 @@ volume_add: .res chnum
 vol_tick: .res chnum
 change_duty: .res chnum
 dpcm_start_delta: .res 1
-
-patloop = 0
+note_delay: .res chnum
+delay_do: .res 1
 
 .segment "CODE"
 .org $8000
@@ -132,6 +133,7 @@ skipW:
 
   lda #0
   sta patind
+  sta delay_do
 
   ldx #chnum-1
 :
@@ -141,6 +143,7 @@ skipW:
   sta dur, x
   lda #$ff
   sta cut_dur, x
+  sta note_delay, x
   sta change_duty, x
   lda #0
   sta ins, x
@@ -423,6 +426,7 @@ other_effects:
 .macro add_advance_routine
 advance:
   .local skipD, noIns, noVol, end, beg, blank, blank2, blank3, begnote
+  .local skip_delay, skip_delay2
 beg:
   lda ch
   asl
@@ -461,6 +465,22 @@ begnote:
   get_patzp
   sta effects_temp+1
   jsr other_effects
+
+  ; add EDxx effect
+  cmp #$ED
+  bne skip_delay
+  ldx ch
+  lda delay_do
+  beq skip_delay2
+  jmp begnote
+skip_delay2:
+  lda effects_temp+1
+  sta note_delay, x
+  sta $100, x
+  lda #1
+  sta dur, x
+  rts
+skip_delay:
   jmp begnote
 :
   get_patzp
@@ -851,11 +871,43 @@ advance_tick:
   lda tick_sel
   eor #1
   sta tick_sel
+  lda #0
+  sta delay_do
   .repeat chnum, I
     lda #I
     sta ch
     jsr advance
   .endrepeat
+
+skipseq:
+
+
+  lda #$ff
+  sta delay_do
+
+  ldx #chnum-1
+note_delay_loop:
+  txa
+  pha
+
+  lda note_delay, x
+  cmp #$ff
+  beq note_delay_loop_end
+  dec note_delay, x
+  lda note_delay, x
+  cmp #$ff
+  beq :+
+  jmp note_delay_loop_end
+:
+  stx ch
+  jsr advance
+note_delay_loop_end:
+  pla
+  tax
+  dex
+  bpl note_delay_loop
+
+
 
   jsr do_dpcm
 
@@ -867,7 +919,7 @@ advance_tick:
   lda patind
   cmp #order0len
   bne :+
-  lda #patloop
+  lda #loop_pattern_num
   sta patind
 :
   jsr set_patseq
@@ -879,8 +931,6 @@ durloop:
     bpl durloop
   jmp advance_tick
 skipnextpat:
-
-skipseq:
 
 .repeat chnum, I
     .if I <> 4

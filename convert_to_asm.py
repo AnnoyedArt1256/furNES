@@ -53,6 +53,14 @@ def conv_pattern(pattern):
         hasEffect = [-1,-1]
         t = temp
         temp = []
+        for l in row.effects:
+            k = list(l)
+            if k[1] == 65535:
+                k[1] = 0
+            if k[0] == 0xED:
+                temp.extend([0xFD, 0xED, k[1]])
+                break
+
         has0Dxx = -1
         for l in row.effects:
             k = list(l)
