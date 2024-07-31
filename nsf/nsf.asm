@@ -476,7 +476,6 @@ begnote:
 skip_delay2:
   lda effects_temp+1
   sta note_delay, x
-  sta $100, x
   lda #1
   sta dur, x
   rts
