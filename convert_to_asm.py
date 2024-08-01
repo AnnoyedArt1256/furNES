@@ -267,11 +267,12 @@ for i in range(len(module.instruments)):
                 patch_custom[4+k] = ((j.op_list[k].ar&15)<<4)|(j.op_list[k].dr&15)
                 patch_custom[6+k] = ((j.op_list[k].sl&15)<<4)|(j.op_list[k].rr&15)
         if patch == 0:
+            duty2 = [0xFE] + patch_custom
             duty = [0xFE] + patch_custom
         else:
+            duty2 = []
             duty = []
         duty.extend([patch,0xFF,0xFF])
-        duty2 = duty
     macros = []
     for j in a:
         macros = j.macros
