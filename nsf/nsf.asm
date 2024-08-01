@@ -867,6 +867,24 @@ end:
     plp
 .endmacro
 
+.macro cmp16a val1, val2
+    lda val1
+    sec
+    sbc #<val2
+    php
+    lda val1+1
+    sbc #>val2
+    php
+    pla
+    sta macroIns
+    pla
+    and #%00000010
+    ora #%11111101
+    and macroIns
+    pha
+    plp
+.endmacro
+
 doFinepitch:
 
   lda vibrato_param, x
@@ -920,66 +938,6 @@ skip_pitch:
   sta temp+1
 
   rts
-
-.if VRC7_SUPPORT = 1
-doFinepitchVRC7:
-  lda vibrato_param, x
-  and #$0f
-  tay
-  lda tri_vibrato_lo, y
-  sta patzp
-  lda tri_vibrato_hi, y
-  sta patzp+1
-
-  lda vibrato_param, x
-  lsr
-  lsr
-  lsr
-  lsr
-  clc
-  adc vibrato_phase, x
-  and #63
-  sta vibrato_phase, x
-  tay
-  lda triangle_lookup, y
-  tay
-
-  clc
-  lda note_pitch_lo, x
-  adc #($80+($1f*4))
-  sta temp
-  lda note_pitch_hi, x
-  adc #0
-  sta temp+1
-
-  sec
-  lda temp
-  sbc finepitch, x
-  sta temp
-  lda temp+1
-  sbc #0
-  sta temp+1
-  bcs skip_pitchVRC7
-  lda #0
-  sta temp
-  sta temp+1
-skip_pitchVRC7:
-
-  lda (patzp), y
-  asl
-  asl
-  sta patzp
-
-  sec
-  lda temp
-  sbc patzp
-  sta temp
-  lda temp+1
-  sbc #0
-  sta temp+1
-
-  rts
-.endif
 
 do_dpcm:
   lda new_dpcm_note
@@ -1489,9 +1447,48 @@ nout_vrc7:
   lda vrc7_pitch_lo, y
   adc slide_buffer_lo+VRC7_CHANNEL, x
   sta note_pitch_lo+VRC7_CHANNEL, x
+  sta patzp
   lda vrc7_pitch_hi, y
   adc slide_buffer_hi+VRC7_CHANNEL, x
   sta note_pitch_hi+VRC7_CHANNEL, x
+  and #1
+  sta patzp+1
+
+  cmp16a patzp, 174
+  bcs :+
+  lda note_pitch_hi+VRC7_CHANNEL, x
+  sec
+  sbc #2
+  bpl low_clamp_skip
+  lda slide_buffer_lo+VRC7_CHANNEL, x
+  sec
+  sbc vrc7_pitch_lo, y
+  sta slide_buffer_lo+VRC7_CHANNEL, x
+  lda slide_buffer_hi+VRC7_CHANNEL, x
+  sbc vrc7_pitch_hi, y
+  sta slide_buffer_hi+VRC7_CHANNEL, x
+  lda #0
+  sta note_pitch_lo+VRC7_CHANNEL, x
+  sta note_pitch_hi+VRC7_CHANNEL, x
+  jmp :+
+low_clamp_skip:
+  and #%1110
+  ora #1
+  sta patzp
+  lda #343&$ff
+  sec
+  sbc vrc7_pitch_lo, y
+  sta slide_buffer_lo+VRC7_CHANNEL, x
+  lda patzp
+  sbc vrc7_pitch_hi, y
+  sta slide_buffer_hi+VRC7_CHANNEL, x
+
+  lda #343&$ff
+  sta note_pitch_lo+VRC7_CHANNEL, x
+
+  lda patzp
+  sta note_pitch_hi+VRC7_CHANNEL, x
+:
 
   clc
   lda slide_amt+VRC7_CHANNEL, x
@@ -1737,27 +1734,11 @@ skip_fds_waveform:
        bne :-
 :
        ldx #VRC7_CHANNEL+I
-       jsr doFinepitchVRC7
+       jsr doFinepitch
 
 
        lda temp+1
-       lsr
-       lsr
-       and #%1110
-;       lsr
-;       and #7
-;       asl
-       sta patzp
-
-       .repeat 2
-          clc
-          lsr temp+1
-          ror temp
-       .endrepeat
-
-       lda temp+1
-       and #1
-       ora patzp
+       and #15
        sta patzp
 
        ldx #VRC7_CHANNEL+I
@@ -1794,8 +1775,10 @@ skip_fds_waveform:
 
        lda patzp
        sta timerH, x
+       sta $90, x
        lda temp
        sta timerL, x
+       sta $80, x
        lda #$20|I
        sta $9010
        jsr wait_9010
@@ -2086,15 +2069,15 @@ fds_pitch_hi:
 .endif
 
 .if VRC7_SUPPORT = 1
-; Fnum table, multiplied by 4 for higher resolution (taken from the DnFT driver)
+; Fnum table (taken from the DnFT driver)
 
 vrc7_pitch_lo:
-    .repeat 8, I
-	    .lobytes $02B0+(I*2048), $02DC+(I*2048), $0308+(I*2048), $0334+(I*2048), $0364+(I*2048), $0398+(I*2048), $03D0+(I*2048), $0408+(I*2048), $0448+(I*2048), $0488+(I*2048), $04CC+(I*2048), $0518+(I*2048)
+    .repeat 10, I
+	    .lobytes ($02B0>>2)+(I*512), ($02DC>>2)+(I*512), ($0308>>2)+(I*512), ($0334>>2)+(I*512), ($0364>>2)+(I*512), ($0398>>2)+(I*512), ($03D0>>2)+(I*512), ($0408>>2)+(I*512), ($0448>>2)+(I*512), ($0488>>2)+(I*512), ($04CC>>2)+(I*512), ($0518>>2)+(I*512)
     .endrepeat
 vrc7_pitch_hi:
-    .repeat 8, I
-	    .hibytes $02B0+(I*2048), $02DC+(I*2048), $0308+(I*2048), $0334+(I*2048), $0364+(I*2048), $0398+(I*2048), $03D0+(I*2048), $0408+(I*2048), $0448+(I*2048), $0488+(I*2048), $04CC+(I*2048), $0518+(I*2048)
+    .repeat 10, I
+	    .hibytes ($02B0>>2)+(I*512), ($02DC>>2)+(I*512), ($0308>>2)+(I*512), ($0334>>2)+(I*512), ($0364>>2)+(I*512), ($0398>>2)+(I*512), ($03D0>>2)+(I*512), ($0408>>2)+(I*512), ($0448>>2)+(I*512), ($0488>>2)+(I*512), ($04CC>>2)+(I*512), ($0518>>2)+(I*512)
     .endrepeat
 vol_reverse_4bit:
     .repeat 16, I
