@@ -1,11 +1,11 @@
 ;;; cl65 -d -vm -l nsf.lst -g -t nes -C nsf.cfg -m nsf.map -Ln nsf.lbl -o driar.nsf nsf.asm
 
 .define FDS_SUPPORT 0
-.define VRC7_SUPPORT 1
+.define VRC7_SUPPORT 0
 .define loop_pattern_num 0
 .define porta_once 1
 
-.define chnum 11
+.define chnum 5
 
 .if FDS_SUPPORT = 1
   .define FDS_CHANNEL 5
