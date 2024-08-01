@@ -1,11 +1,18 @@
 ;;; cl65 -d -vm -l nsf.lst -g -t nes -C nsf.cfg -m nsf.map -Ln nsf.lbl -o driar.nsf nsf.asm
 
 .define FDS_SUPPORT 0
-.define chnum 5
+.define VRC7_SUPPORT 1
 .define loop_pattern_num 0
+.define porta_once 1
+
+.define chnum 11
 
 .if FDS_SUPPORT = 1
   .define FDS_CHANNEL 5
+.endif
+
+.if VRC7_SUPPORT = 1
+  .define VRC7_CHANNEL 5
 .endif
 
 .segment "HEADER"
@@ -33,7 +40,7 @@
 	.byte 0,1,2,0,0,0,0,0 ; disable bankswitching
 	.word 19997	; Real PAL rate
 	.byte 0	; Prefer PAL, compatible with both
-	.byte FDS_SUPPORT<<2	; no expansion audio
+	.byte FDS_SUPPORT<<2|VRC7_SUPPORT<<1	; no expansion audio
 	.byte 0,0,0,0
 
 ;tick_speed = 3
@@ -64,6 +71,9 @@ mframeD: .res chnum
 doMacroA: .res chnum
 doMacroV: .res chnum
 doMacroD: .res chnum
+.if VRC7_SUPPORT = 1
+timerL: .res chnum
+.endif
 timerH: .res chnum
 arp: .res chnum
 absarp: .res chnum
@@ -90,6 +100,18 @@ change_duty: .res chnum
 dpcm_start_delta: .res 1
 note_delay: .res chnum
 delay_do: .res 1
+note_play: .res chnum
+note_dur: .res chnum
+.if porta_once = 1
+didporta: .res chnum
+.endif
+.if VRC7_SUPPORT = 1
+custom_patch: .res 8
+write_patch: .res 1
+.endif
+arpeff1: .res chnum
+arpeff2: .res chnum
+arpind: .res chnum
 
 .segment "CODE"
 .org $8000
@@ -116,10 +138,32 @@ skipW:
     lda #$FF
     sta $408A
   .endif
+  .if VRC7_SUPPORT = 1
+     lda #0
+     sta write_patch
+     tax
+:
+     stx $9010
+     jsr wait_9010
+     sta $9030
+     jsr wait_9030
+     inx
+     cpx #$3f
+     bne :-
+  .endif
   lda #8
   sta $4001
   lda #8
   sta $4005
+
+.if VRC7_SUPPORT = 1
+  ldx #7
+  lda #0
+:
+  sta custom_patch, x
+  dex
+  bpl :-
+.endif
 
   lda #0
   sta tick_sel
@@ -144,9 +188,17 @@ skipW:
   lda #$ff
   sta cut_dur, x
   sta note_delay, x
-  sta change_duty, x
   lda #0
+.if porta_once = 1
+  sta didporta, x
+.endif
+  sta arpind, x
+  sta arpeff1, x
+  sta arpeff2, x
   sta ins, x
+  sta note_play, x
+  sta change_duty, x
+  sta note_dur, x
   sta arp, x
   sta volume_add, x
   sta slide_amt, x
@@ -162,6 +214,10 @@ skipW:
   sta doMacroV, x
   sta doMacroD, x
   sta volout, x
+.if VRC7_SUPPORT = 1
+  sta timerL, x
+.endif
+  sta timerH, x
   lda #$ff
   sta isoff, x
   sta vol_tick, x
@@ -207,7 +263,29 @@ setduty:
   ldx ch
   get_patzp
   sta duty, x
+  lda #$ff
+  sta change_duty, x
   rts
+
+.macro add_00xx
+  .local skip
+  cmp #$00
+  bne skip
+  ldx ch
+  lda #0
+  sta arpind, x
+  lda effects_temp+1
+  and #$0f
+  sta arpeff2, x
+  lda effects_temp+1
+  lsr
+  lsr
+  lsr
+  lsr
+  sta arpeff1, x
+  rts
+skip:
+.endmacro
 
 .macro add_09xx
   .local skip
@@ -235,6 +313,10 @@ skip:
   cmp #$01
   bne skip
   ldx ch
+.if porta_once = 1
+  lda #$00
+  sta didporta, x
+.endif
   lda effects_temp+1
   sta slide_amt, x
   lda #$ff
@@ -252,6 +334,10 @@ skip:
   cmp #$02
   bne skip
   ldx ch
+.if porta_once = 1
+  lda #$00
+  sta didporta, x
+.endif
   lda effects_temp+1
   sta slide_amt, x
   lda #$00
@@ -275,6 +361,10 @@ skip:
   get_patzp
   ldx ch
   sta note_dest, x
+.if porta_once = 1
+  lda #$ff
+  sta didporta, x
+.endif
 
   lda note_n, x
   cmp note_dest, x
@@ -326,6 +416,10 @@ skip:
   cmp #$E1
   bne skip
   ldx ch
+.if porta_once = 1
+  lda #$ff
+  sta didporta, x
+.endif
   lda effects_temp+1
   asl
   asl
@@ -346,6 +440,10 @@ skip:
   cmp #$E2
   bne skip
   ldx ch
+.if porta_once = 1
+  lda #$ff
+  sta didporta, x
+.endif
   lda effects_temp+1
   asl
   asl
@@ -409,6 +507,7 @@ skip:
 
 other_effects:
   lda effects_temp
+  add_00xx
   add_09xx
   add_0Fxx
   add_01xx
@@ -523,12 +622,29 @@ blank3:
   sta mframeD, x
   sta slide_buffer_lo, x
   sta slide_buffer_hi, x
+.if porta_once = 1
+  cmp didporta, x
+  beq :+
+  sta didporta, x
+  sta slide_amt, x
+  sta slide_amt_sign, x
+:
+.endif
   lda #$ff
   sta doMacroA, x
   sta doMacroV, x
   sta doMacroD, x
+  lda note_dur, x
+  cmp #1
+  bcc :+
+  lda #$ff
+  sta note_play, x
+  lda #0
+  sta note_dur, x
+:
   cpx #4
   bne blank2
+  lda #$ff
   sta new_dpcm_note
 blank2:
   lda temp
@@ -660,7 +776,7 @@ end:
 .endmacro
 
 .macro insduty ch
-  .local end, skip1, beg, skip2
+  .local end, skip1, beg, skip2, skip3
 beg:
   lda doMacroD+ch
   cmp #0
@@ -673,6 +789,28 @@ beg:
   sta macroIns+1
   ldy mframeD+ch
   lda (macroIns), y
+  cmp #$fe
+  bne skip3
+  .if VRC7_SUPPORT = 1
+    ldx #0
+    :
+        iny
+        lda (macroIns), y
+        sta custom_patch, x
+        inx
+        cpx #8
+        bne :-
+    lda mframeD+ch
+    clc
+    adc #9
+    sta mframeD+ch
+    lda #$ff
+    sta write_patch
+    jmp end
+  .else
+    jmp skip1
+  .endif
+skip3:
   cmp #$ff
   bne skip1
   iny
@@ -686,9 +824,27 @@ beg:
   sta doMacroD+ch
   jmp end
 skip1:
-  sta duty+ch
-  lda #$ff
-  sta change_duty+ch
+  .if (VRC7_SUPPORT = 1)
+    .if (ch >= VRC7_CHANNEL) && (ch < (VRC7_CHANNEL+6))
+        ldy change_duty+ch
+        cpy #0
+        beq :+
+        inc mframeD+ch
+        lda #0
+        sta change_duty+ch
+        jmp end
+    :
+        sta duty+ch
+    .else
+        sta duty+ch
+        lda #$ff
+        sta change_duty+ch
+    .endif
+  .else
+    sta duty+ch
+    lda #$ff
+    sta change_duty+ch
+  .endif
   inc mframeD+ch
 end:
 .endmacro
@@ -764,6 +920,66 @@ skip_pitch:
   sta temp+1
 
   rts
+
+.if VRC7_SUPPORT = 1
+doFinepitchVRC7:
+  lda vibrato_param, x
+  and #$0f
+  tay
+  lda tri_vibrato_lo, y
+  sta patzp
+  lda tri_vibrato_hi, y
+  sta patzp+1
+
+  lda vibrato_param, x
+  lsr
+  lsr
+  lsr
+  lsr
+  clc
+  adc vibrato_phase, x
+  and #63
+  sta vibrato_phase, x
+  tay
+  lda triangle_lookup, y
+  tay
+
+  clc
+  lda note_pitch_lo, x
+  adc #($80+($1f*4))
+  sta temp
+  lda note_pitch_hi, x
+  adc #0
+  sta temp+1
+
+  sec
+  lda temp
+  sbc finepitch, x
+  sta temp
+  lda temp+1
+  sbc #0
+  sta temp+1
+  bcs skip_pitchVRC7
+  lda #0
+  sta temp
+  sta temp+1
+skip_pitchVRC7:
+
+  lda (patzp), y
+  asl
+  asl
+  sta patzp
+
+  sec
+  lda temp
+  sbc patzp
+  sta temp
+  lda temp+1
+  sbc #0
+  sta temp+1
+
+  rts
+.endif
 
 do_dpcm:
   lda new_dpcm_note
@@ -880,7 +1096,6 @@ advance_tick:
 
 skipseq:
 
-
   lda #$ff
   sta delay_do
 
@@ -931,12 +1146,20 @@ durloop:
   jmp advance_tick
 skipnextpat:
 
+
 .repeat chnum, I
     .if I <> 4
         insarp I
         insvol I
         insduty I
     .endif
+    inc note_dur+I
+    lda note_dur+I
+    cmp #96
+    bne :+
+    lda #0
+    sta note_dur+I
+:
 .endrepeat
 
 
@@ -1024,6 +1247,8 @@ nrel:
   clc
   adc arp, x
 nout:
+  clc
+  jsr add_arpeff
   tay
   clc
   lda note_table_lo, y
@@ -1131,7 +1356,7 @@ slide_loopt:
   cmp #$20
   bcc vol_add_loop_end_fds
   lda #$20
-  sta vol, x
+  sta vol+FDS_CHANNEL
 vol_add_loop_end_fds:
 
   lda absarp+FDS_CHANNEL
@@ -1144,6 +1369,8 @@ nrel_fds:
   clc
   adc arp+FDS_CHANNEL
 nout_fds:
+  clc
+  jsr add_arpeff
   tay
   clc
   lda fds_pitch_lo, y
@@ -1212,6 +1439,123 @@ finish_slide_fds:
   sta slide_amt_sign+FDS_CHANNEL
   jmp slide_loop_fds
 slide_loop_fds:
+.endif
+
+
+.if VRC7_SUPPORT = 1
+  ldx #5
+VRC7_LOOP:
+  lda vol_tick+VRC7_CHANNEL, x
+  cmp #$ff
+  beq vol_add_loop_end_vrc7
+  lda vol_tick+VRC7_CHANNEL, x
+  and #3
+  sta vol_tick+VRC7_CHANNEL, x
+  inc vol_tick+VRC7_CHANNEL, x
+  ora volume_add+VRC7_CHANNEL, x
+  tay
+  lda vol_slide_lookup, y
+  clc
+  adc vol+VRC7_CHANNEL, x
+  sta vol+VRC7_CHANNEL, x
+  and #$80
+  cmp #$80
+  bne :+
+  lda #0
+  sta vol+VRC7_CHANNEL, x
+  jmp vol_add_loop_end_vrc7
+:
+  lda vol+VRC7_CHANNEL, x
+  cmp #$10
+  bcc vol_add_loop_end_vrc7
+  lda #$10
+  sta vol+VRC7_CHANNEL, x
+vol_add_loop_end_vrc7:
+
+  lda absarp+VRC7_CHANNEL, x
+  beq nrel_vrc7
+  lda arp+VRC7_CHANNEL, x
+  and #127
+  jmp nout_vrc7
+nrel_vrc7:
+  lda note_n+VRC7_CHANNEL, x
+  clc
+  adc arp+VRC7_CHANNEL, x
+nout_vrc7:
+  clc
+  jsr add_arpeffVRC7
+  tay
+  clc
+  lda vrc7_pitch_lo, y
+  adc slide_buffer_lo+VRC7_CHANNEL, x
+  sta note_pitch_lo+VRC7_CHANNEL, x
+  lda vrc7_pitch_hi, y
+  adc slide_buffer_hi+VRC7_CHANNEL, x
+  sta note_pitch_hi+VRC7_CHANNEL, x
+
+  clc
+  lda slide_amt+VRC7_CHANNEL, x
+  bne :+
+  jmp slide_loop_vrc7
+:
+  lda slide_amt_sign+VRC7_CHANNEL, x
+  bne positive_slide_vrc7
+  sec
+  lda slide_buffer_lo+VRC7_CHANNEL, x
+  sbc slide_amt+VRC7_CHANNEL, x
+  sta slide_buffer_lo+VRC7_CHANNEL, x
+  lda slide_buffer_hi+VRC7_CHANNEL, x
+  sbc #0
+  sta slide_buffer_hi+VRC7_CHANNEL, x
+
+  ldy note_dest+VRC7_CHANNEL, x
+  lda vrc7_pitch_lo, y
+  sta patzp
+  lda vrc7_pitch_hi, y
+  sta patzp+1
+  lda note_pitch_lo+VRC7_CHANNEL, x
+  sta patzp+2
+  lda note_pitch_hi+VRC7_CHANNEL, x
+  sta patzp+3
+  cmp16 patzp, patzp+2
+  bcc slide_loop_vrc7
+  jmp finish_slide_vrc7
+positive_slide_vrc7:
+  clc
+  lda slide_buffer_lo+VRC7_CHANNEL, x
+  adc slide_amt+VRC7_CHANNEL, x
+  sta slide_buffer_lo+VRC7_CHANNEL, x
+  lda slide_buffer_hi+VRC7_CHANNEL, x
+  adc #0
+  sta slide_buffer_hi+VRC7_CHANNEL, x
+
+  ldy note_dest+VRC7_CHANNEL, x
+  lda vrc7_pitch_lo, y
+  sta patzp
+  lda vrc7_pitch_hi, y
+  sta patzp+1
+  lda note_pitch_lo+VRC7_CHANNEL, x
+  sta patzp+2
+  lda note_pitch_hi+VRC7_CHANNEL, x
+  sta patzp+3
+  cmp16 patzp+2, patzp
+  bcc slide_loop_vrc7
+  jmp finish_slide_vrc7
+
+finish_slide_vrc7:
+  lda note_dest+VRC7_CHANNEL, x
+  sta note_n+VRC7_CHANNEL, x
+  lda #0
+  sta slide_buffer_lo+VRC7_CHANNEL, x
+  sta slide_buffer_hi+VRC7_CHANNEL, x
+  sta slide_amt+VRC7_CHANNEL, x
+  sta slide_amt_sign+VRC7_CHANNEL, x
+  jmp slide_loop_vrc7
+slide_loop_vrc7:
+  dex
+  bmi :+
+  jmp VRC7_LOOP
+:
 .endif
 
   ldx #chnum-1
@@ -1311,6 +1655,8 @@ NOISrel:
   adc arp+3
 NOISout:
   clc
+  jsr add_arpeff
+  clc
   adc slide_buffer_lo+3
   and #15
   eor #15
@@ -1374,8 +1720,118 @@ skip_fds_waveform:
   :
   .endif
 
+  .if VRC7_SUPPORT = 1
+     .repeat 6, I
+       lda write_patch
+       beq :++
+       ldx #0
+       stx write_patch
+:
+       stx $9010
+       jsr wait_9010
+       lda custom_patch, x
+       sta $9030
+       jsr wait_9030
+       inx
+       cpx #8
+       bne :-
+:
+       ldx #VRC7_CHANNEL+I
+       jsr doFinepitchVRC7
+
+
+       lda temp+1
+       lsr
+       lsr
+       and #%1110
+;       lsr
+;       and #7
+;       asl
+       sta patzp
+
+       .repeat 2
+          clc
+          lsr temp+1
+          ror temp
+       .endrepeat
+
+       lda temp+1
+       and #1
+       ora patzp
+       sta patzp
+
+       ldx #VRC7_CHANNEL+I
+
+       lda #$30|I
+       sta $9010
+       jsr wait_9010
+       lda duty, x
+       asl
+       asl
+       asl
+       asl
+       ldy volout, x
+       ora vol_reverse_4bit, y
+       sta $9030
+       jsr wait_9030
+
+
+       lda note_play, x
+       beq :+
+       lda #$20|I
+       sta $9010
+       jsr wait_9010
+       lda patzp
+       sta $9030
+       jsr wait_9030
+:
+
+       lda isoff, x
+       and #%00010000
+       eor #%00010000
+       ora patzp
+       sta patzp
+
+       lda patzp
+       sta timerH, x
+       lda temp
+       sta timerL, x
+       lda #$20|I
+       sta $9010
+       jsr wait_9010
+       lda timerH, x
+       sta $9030
+       jsr wait_9030
+
+       lda #$10|I
+       sta $9010
+       jsr wait_9010
+       lda temp
+       sta $9030
+       jsr wait_9030
+
+
+       lda #0
+       sta note_play, x
+     .endrepeat
+  .endif
+
   rts
 .endproc
+
+.if VRC7_SUPPORT = 1
+wait_9030:          ; JSR to this label immediately after writing to $9030
+    tya
+    pha
+   ldy #$08
+@wait_loop:
+    dey
+    bne @wait_loop
+    pla
+    tay
+wait_9010:          ; JSR to this label immediately after writing to $9010
+    rts
+.endif
 
 set_patseq:
   stx temp+2
@@ -1414,6 +1870,61 @@ set_patseq_init:
   .endrepeat
   rts
 
+
+add_arpeff:
+  pha
+  inc arpind, x
+  lda arpind, x
+  tay
+  lda arp_mod, y
+  sta arpind, x
+  tay
+  pla
+  cpy #1
+  beq arp1
+  cpy #2
+  beq arp2
+  rts
+
+arp1:
+  clc
+  adc arpeff1, x
+  rts
+
+arp2:
+  clc
+  adc arpeff2, x
+  rts
+
+.if VRC7_SUPPORT = 1
+add_arpeffVRC7:
+  pha
+  inc arpind+VRC7_CHANNEL, x
+  lda arpind+VRC7_CHANNEL, x
+  tay
+  lda arp_mod+VRC7_CHANNEL, y
+  sta arpind+VRC7_CHANNEL, x
+  tay
+  pla
+  cpy #1
+  beq arp1VRC7
+  cpy #2
+  beq arp2VRC7
+  rts
+
+arp1VRC7:
+  clc
+  adc arpeff1+VRC7_CHANNEL, x
+  rts
+
+arp2VRC7:
+  clc
+  adc arpeff2+VRC7_CHANNEL, x
+  rts
+.endif
+
+arp_mod:
+.byte 0,1,2,0
 
 patLL:
   .repeat chnum, I
@@ -1572,6 +2083,23 @@ fds_pitch_hi:
 	.hibytes	$0265, $028A, $02B0, $02D9, $0304, $0332, $0363, $0397, $03CD, $0407, $0444, $0485
 	.hibytes	$04CA, $0513, $0560, $05B2, $0609, $0665, $06C6, $072D, $079B, $080E, $0889, $090B
 	.hibytes	$0994, $0A26, $0AC1, $0B64, $0C12, $0CCA, $0D8C
+.endif
+
+.if VRC7_SUPPORT = 1
+; Fnum table, multiplied by 4 for higher resolution (taken from the DnFT driver)
+
+vrc7_pitch_lo:
+    .repeat 8, I
+	    .lobytes $02B0+(I*2048), $02DC+(I*2048), $0308+(I*2048), $0334+(I*2048), $0364+(I*2048), $0398+(I*2048), $03D0+(I*2048), $0408+(I*2048), $0448+(I*2048), $0488+(I*2048), $04CC+(I*2048), $0518+(I*2048)
+    .endrepeat
+vrc7_pitch_hi:
+    .repeat 8, I
+	    .hibytes $02B0+(I*2048), $02DC+(I*2048), $0308+(I*2048), $0334+(I*2048), $0364+(I*2048), $0398+(I*2048), $03D0+(I*2048), $0408+(I*2048), $0448+(I*2048), $0488+(I*2048), $04CC+(I*2048), $0518+(I*2048)
+    .endrepeat
+vol_reverse_4bit:
+    .repeat 16, I
+        .byte 15-I
+    .endrepeat
 .endif
 
 .include "song.asm"

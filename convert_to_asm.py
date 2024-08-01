@@ -1,5 +1,5 @@
 from chipchune.furnace.module import FurnaceModule
-from chipchune.furnace.data_types import InsFeatureMacro, InsFeatureDPCMMap, InsFeatureAmiga
+from chipchune.furnace.data_types import InsFeatureMacro, InsFeatureDPCMMap, InsFeatureAmiga, InsFeatureFM
 from chipchune.furnace.enums import MacroCode
 from chipchune.furnace.enums import MacroItem
 from chipchune.furnace.enums import InstrumentType
@@ -66,9 +66,14 @@ def conv_pattern(pattern):
             k = list(l)
             if k[1] == 65535:
                 k[1] = 0
-
+            if k[0] == 0x00:
+                temp.extend([0xFD, 0x00, k[1]])
+                continue
             if k[0] == 0xD:
                 has0Dxx = k[1]
+                continue
+            if k[0] == 0x10:
+                temp.extend([0xFE, k[1]])
                 continue
             if k[0] == 0x11:
                 temp.extend([0xFD, 0x11, k[1]])
@@ -209,6 +214,11 @@ for i in range(len(module.instruments)):
             type(x) == InsFeatureMacro
         ), features
     )
+    b = filter(
+        lambda x: (
+            type(x) == InsFeatureFM
+        ), features
+    )
     arp = [128,0xFF,0xFF]
     #vol = [0xFF,0xFF]
     vol = [0x0F,0xFF,0xFF]
@@ -217,8 +227,51 @@ for i in range(len(module.instruments)):
     if module.instruments[i].meta.type == InstrumentType.FDS:
         vol = [0x20,0xFF,0xFF]
         insChipType = 1
+    if module.instruments[i].meta.type == InstrumentType.FM_OPLL:
+        insChipType = 2
 
+    patch_custom = [0]*8
     duty = [0xFF,0xFF]
+    duty2 = []
+    if insChipType == 2:
+        patch = 0
+        for j in b:
+            print(j.op_list[0])
+            print(j.op_list[1])
+            patch = j.opll_preset
+            """
+            $00 	TVSK MMMM 	Modulator tremolo (T), vibrato (V), sustain (S), key rate scaling (K), multiplier (M)
+            $01 	TVSK MMMM 	Carrier tremolo (T), vibrato (V), sustain (S), key rate scaling (K), multiplier (M)
+            $02 	KKOO OOOO 	Modulator key level scaling (K), output level (O)
+            $03 	KK-Q WFFF 	Carrier key level scaling (K), unused (-), carrier waveform (Q), modulator waveform (W), feedback (F)
+            $04 	AAAA DDDD 	Modulator attack (A), decay (D)
+            $05 	AAAA DDDD 	Carrier attack (A), decay (D)
+            $06 	SSSS RRRR 	Modulator sustain (S), release (R)
+            $07 	SSSS RRRR 	Carrier sustain (S), release (R)
+            """
+            patch_custom[3] = j.fb&7
+            patch_custom[3] |= (j.ams)<<3
+            patch_custom[3] |= (j.fms)<<4
+            patch_custom[2] = j.op_list[0].tl&63
+            for k in range(2):
+                patch_custom[k] = j.op_list[k].mult&15
+                if j.op_list[k].am:
+                    patch_custom[k] |= 0x80
+                if j.op_list[k].vib:
+                    patch_custom[k] |= 0x40
+                if j.op_list[k].ssg_env:
+                    patch_custom[k] |= 0x20
+                if j.op_list[k].ksr:
+                    patch_custom[k] |= 0x10
+                patch_custom[2+k] |= (j.op_list[k].ksl&3)<<6
+                patch_custom[4+k] = ((j.op_list[k].ar&15)<<4)|(j.op_list[k].dr&15)
+                patch_custom[6+k] = ((j.op_list[k].sl&15)<<4)|(j.op_list[k].rr&15)
+        if patch == 0:
+            duty = [0xFE] + patch_custom
+        else:
+            duty = []
+        duty.extend([patch,0xFF,0xFF])
+        duty2 = duty
     macros = []
     for j in a:
         macros = j.macros
@@ -301,9 +354,11 @@ for i in range(len(module.instruments)):
             hasRelTotal[2] = 1
             duty.append(0xFF)
             duty.append(loop)
-        if kind == MacroCode.WAVE and insChipType == 1:
+        if kind == MacroCode.WAVE and (insChipType == 1 or insChipType == 2):
             s = j.speed
             duty = []
+            if insChipType == 2:
+                duty = duty2
             loop = 0xff
             loop2 = 0xff
             hasRel = 0

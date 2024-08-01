@@ -9,11 +9,12 @@ Yes, this is real, but you can't just drop in any .fur file with the NES chip en
 * You have to have [Python](https://www.python.org/) and the [CC65 toolchain](https://cc65.github.io/) installed
 * You **have** to set the pitch linearity option to "None". You can do this by going to `window -> song -> compatability flags -> Pitch/Playback -> Pitch linearity` and then setting the option to "None".
 
-* This only supports 2A03 and FDS (which can be enabled through a flag in the driver source). Also this only supports DPCM samples, so that means that there will be no 7-bit PCM samples :/
+* This only supports 2A03, FDS and VRC7 (which can be enabled through a flag in the driver source). Also this only supports DPCM samples, so that means that there will be no 7-bit PCM samples :/
 
 * The driver only supports **arpeggio, volume and duty/waveform** macros in each instrument and it **DOESN'T support LFO and ADSR macros nor delay and step length**
 
 * The furNES driver only supports these effects:
+  * 00xx: arpeggio
   * 01xx: pitch slide up
   * 02xx: pitch slide down
   * 03xx: portamento
@@ -22,6 +23,7 @@ Yes, this is real, but you can't just drop in any .fur file with the NES chip en
   * 0Dxx: jump to next pattern
   * 0Fxx: set speed 2
   * 0Axx: volume slide
+  * 10xx: set patch/waveform (for VRC7 and FDS)
   * 11xx: write to delta counter
   * 12xx: set duty cycle/noise mode
   * E1xx: note slide up
