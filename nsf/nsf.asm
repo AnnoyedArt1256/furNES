@@ -1736,10 +1736,8 @@ skip_fds_waveform:
 
        lda patzp
        sta timerH, x
-       sta $90, x
        lda temp
        sta timerL, x
-       sta $80, x
        lda #$20|I
        sta $9010
        jsr wait_9010
