@@ -3,7 +3,7 @@
 .define FDS_SUPPORT 0
 .define VRC7_SUPPORT 0
 .define loop_pattern_num 0
-.define porta_once 1
+.define porta_once 0
 
 .define chnum 5
 
@@ -1195,29 +1195,8 @@ slide_skip:
 
   ldx #4
 note_loop:
-  lda absarp, x
-  beq nrel
-  lda arp, x
-  and #127
-  jmp nout
-nrel:
-  lda note_n, x
-  clc
-  adc arp, x
-nout:
-  clc
-  jsr add_arpeff
-  tay
-  clc
-  lda note_table_lo, y
-  adc slide_buffer_lo, x
-  sta note_pitch_lo, x
-  lda note_table_hi, y
-  adc slide_buffer_hi, x
-  sta note_pitch_hi, x
-
+  jsr conv_freq
   dex
-note_loop2:
   bpl note_loop
 
   ldx #3
@@ -1282,7 +1261,7 @@ finish_slide:
   sta slide_buffer_hi, x
   sta slide_amt, x
   sta slide_amt_sign, x
-  jmp slide_loop2
+  jsr conv_freq
 slide_loop2:
   dex
   bmi slide_loopt
@@ -1317,26 +1296,7 @@ slide_loopt:
   sta vol+FDS_CHANNEL
 vol_add_loop_end_fds:
 
-  lda absarp+FDS_CHANNEL
-  beq nrel_fds
-  lda arp+FDS_CHANNEL
-  and #127
-  jmp nout_fds
-nrel_fds:
-  lda note_n+FDS_CHANNEL
-  clc
-  adc arp+FDS_CHANNEL
-nout_fds:
-  clc
-  jsr add_arpeff
-  tay
-  clc
-  lda fds_pitch_lo, y
-  adc slide_buffer_lo+FDS_CHANNEL
-  sta note_pitch_lo+FDS_CHANNEL
-  lda fds_pitch_hi, y
-  adc slide_buffer_hi+FDS_CHANNEL
-  sta note_pitch_hi+FDS_CHANNEL
+  jsr conv_freq_FDS
 
   clc
   lda slide_amt+FDS_CHANNEL
@@ -1385,7 +1345,6 @@ positive_slide_fds:
   sta patzp+3
   cmp16 patzp+2, patzp
   bcc slide_loop_fds
-  jmp finish_slide_fds
 
 finish_slide_fds:
   lda note_dest+FDS_CHANNEL
@@ -1395,7 +1354,7 @@ finish_slide_fds:
   sta slide_buffer_hi+FDS_CHANNEL
   sta slide_amt+FDS_CHANNEL
   sta slide_amt_sign+FDS_CHANNEL
-  jmp slide_loop_fds
+  jsr conv_freq_FDS
 slide_loop_fds:
 .endif
 
@@ -1430,29 +1389,7 @@ VRC7_LOOP:
   sta vol+VRC7_CHANNEL, x
 vol_add_loop_end_vrc7:
 
-  lda absarp+VRC7_CHANNEL, x
-  beq nrel_vrc7
-  lda arp+VRC7_CHANNEL, x
-  and #127
-  jmp nout_vrc7
-nrel_vrc7:
-  lda note_n+VRC7_CHANNEL, x
-  clc
-  adc arp+VRC7_CHANNEL, x
-nout_vrc7:
-  clc
-  jsr add_arpeffVRC7
-  tay
-  clc
-  lda vrc7_pitch_lo, y
-  adc slide_buffer_lo+VRC7_CHANNEL, x
-  sta note_pitch_lo+VRC7_CHANNEL, x
-  sta patzp
-  lda vrc7_pitch_hi, y
-  adc slide_buffer_hi+VRC7_CHANNEL, x
-  sta note_pitch_hi+VRC7_CHANNEL, x
-  and #1
-  sta patzp+1
+  jsr conv_freq_VRC7
 
   cmp16a patzp, 174
   bcs :+
@@ -1547,7 +1484,8 @@ finish_slide_vrc7:
   sta slide_buffer_hi+VRC7_CHANNEL, x
   sta slide_amt+VRC7_CHANNEL, x
   sta slide_amt_sign+VRC7_CHANNEL, x
-  jmp slide_loop_vrc7
+  jsr conv_freq_VRC7
+
 slide_loop_vrc7:
   dex
   bmi :+
@@ -1879,6 +1817,54 @@ arp2:
   adc arpeff2, x
   rts
 
+conv_freq:
+  lda absarp, x
+  beq nrel
+  lda arp, x
+  and #127
+  jmp nout
+nrel:
+  lda note_n, x
+  clc
+  adc arp, x
+nout:
+  clc
+  jsr add_arpeff
+  tay
+  clc
+  lda note_table_lo, y
+  adc slide_buffer_lo, x
+  sta note_pitch_lo, x
+  lda note_table_hi, y
+  adc slide_buffer_hi, x
+  sta note_pitch_hi, x
+  rts
+
+.if FDS_SUPPORT = 1
+conv_freq_FDS:
+  lda absarp+FDS_CHANNEL
+  beq nrel_fds
+  lda arp+FDS_CHANNEL
+  and #127
+  jmp nout_fds
+nrel_fds:
+  lda note_n+FDS_CHANNEL
+  clc
+  adc arp+FDS_CHANNEL
+nout_fds:
+  clc
+  jsr add_arpeff
+  tay
+  clc
+  lda fds_pitch_lo, y
+  adc slide_buffer_lo+FDS_CHANNEL
+  sta note_pitch_lo+FDS_CHANNEL
+  lda fds_pitch_hi, y
+  adc slide_buffer_hi+FDS_CHANNEL
+  sta note_pitch_hi+FDS_CHANNEL
+  rts
+.endif
+
 .if VRC7_SUPPORT = 1
 add_arpeffVRC7:
   pha
@@ -1903,6 +1889,32 @@ arp1VRC7:
 arp2VRC7:
   clc
   adc arpeff2+VRC7_CHANNEL, x
+  rts
+
+conv_freq_VRC7:
+  lda absarp+VRC7_CHANNEL, x
+  beq nrel_vrc7
+  lda arp+VRC7_CHANNEL, x
+  and #127
+  jmp nout_vrc7
+nrel_vrc7:
+  lda note_n+VRC7_CHANNEL, x
+  clc
+  adc arp+VRC7_CHANNEL, x
+nout_vrc7:
+  clc
+  jsr add_arpeffVRC7
+  tay
+  clc
+  lda vrc7_pitch_lo, y
+  adc slide_buffer_lo+VRC7_CHANNEL, x
+  sta note_pitch_lo+VRC7_CHANNEL, x
+  sta patzp
+  lda vrc7_pitch_hi, y
+  adc slide_buffer_hi+VRC7_CHANNEL, x
+  sta note_pitch_hi+VRC7_CHANNEL, x
+  and #1
+  sta patzp+1
   rts
 .endif
 
