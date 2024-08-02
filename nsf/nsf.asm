@@ -1391,6 +1391,29 @@ vol_add_loop_end_vrc7:
 
   jsr conv_freq_VRC7
 
+  cmp16a patzp, 343
+  bcc :+
+  lda note_pitch_hi+VRC7_CHANNEL, x
+  clc
+  adc #2
+  and #%1110
+  sta patzp
+  lda #($2B0>>2)
+  sec
+  sbc vrc7_pitch_lo, y
+  sta slide_buffer_lo+VRC7_CHANNEL, x
+  lda patzp
+  sbc vrc7_pitch_hi, y
+  sta slide_buffer_hi+VRC7_CHANNEL, x
+
+  lda #($2B0>>2)
+  sta note_pitch_lo+VRC7_CHANNEL, x
+
+  lda patzp
+  sta note_pitch_hi+VRC7_CHANNEL, x
+  jmp :++
+:
+
   cmp16a patzp, 174
   bcs :+
   lda note_pitch_hi+VRC7_CHANNEL, x
