@@ -34,7 +34,7 @@ Yes, this is real, but you can't just drop in any .fur file with the NES chip en
 
 when you've finished / want to test out this driver:
 * open the terminal/command prompt **to the furNES directory**
-* run `convert.sh your_fur_file.fur` or `convert.bat file.fur` (depending on your OS)
+* run `./convert.sh your_fur_file.fur` or `convert.bat file.fur` (depending on your OS)
 * in the `furNES/nsf` directory you'll hopefully see a file called **`furNES-test.nsf`**
   * that's your .nsf music file that you can play on any hardware or software NSF player!
 
