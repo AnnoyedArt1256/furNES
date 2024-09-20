@@ -1,11 +1,12 @@
 from chipchune.furnace.module import FurnaceModule
-from chipchune.furnace.data_types import InsFeatureMacro, InsFeatureDPCMMap, InsFeatureAmiga, InsFeatureFM
+from chipchune.furnace.data_types import InsFeatureMacro, InsFeatureDPCMMap, InsFeatureAmiga
 from chipchune.furnace.enums import MacroCode
 from chipchune.furnace.enums import MacroItem
 from chipchune.furnace.enums import InstrumentType
-import sys
+import sys, math
 
 subsong = 0
+dups = {}
 
 print(sys.argv)
 module = FurnaceModule(sys.argv[1])
@@ -29,26 +30,34 @@ def conv_pattern(pattern):
         bit = 0
         temp = []
         notnote = 0
+        new_byte = 0
         if str(row.note) == "OFF_REL":
             notnote = 1
+            new_byte = 1
             temp.append(0x82)
         elif str(row.note) == "REL":
             notnote = 1
+            new_byte = 1
             temp.append(0x82)
         elif str(row.note) == "OFF":
             notnote = 1
+            new_byte = 1
             temp.append(0x81)
         elif str(row.note) == "__" or (has03xx == 1):
             if has03xx == 0:
                 notnote = 1
+            new_byte = 1
             temp.append(0x80)
         else:
+            new_byte = 1
             temp.append(max(min(notes.index(str(row.note))+(row.octave*12),127),0))
         if row.instrument != 65535:
+            new_byte = 1
             bit |= 1
             temp.append(row.instrument)
         if row.volume != 65535:
             bit |= 2
+            new_byte = 1
             temp.append(row.volume)
         hasEffect = [-1,-1]
         t = temp
@@ -58,6 +67,7 @@ def conv_pattern(pattern):
             if k[1] == 65535:
                 k[1] = 0
             if k[0] == 0xED:
+                new_byte = 1
                 temp.extend([0xFD, 0xED, k[1]])
                 break
 
@@ -67,46 +77,59 @@ def conv_pattern(pattern):
             if k[1] == 65535:
                 k[1] = 0
             if k[0] == 0x00:
+                new_byte = 1
                 temp.extend([0xFD, 0x00, k[1]])
                 continue
             if k[0] == 0xD:
                 has0Dxx = k[1]
                 continue
             if k[0] == 0x10:
+                new_byte = 1
                 temp.extend([0xFE, k[1]])
                 continue
             if k[0] == 0x11:
+                new_byte = 1
                 temp.extend([0xFD, 0x11, k[1]])
                 continue
             if k[0] == 0x12:
+                new_byte = 1
                 temp.extend([0xFE, k[1]])
                 continue
             if (k[0] == 0x09 or k[0] == 0x0F) and (speed_type == 1):
+                new_byte = 1
                 temp.extend([0xFD, 0x0F, k[1]])
                 temp.extend([0xFD, 0x09, k[1]])
                 continue
             if k[0] == 0x0F and (speed_type == 2):
+                new_byte = 1
                 temp.extend([0xFD, 0x0F, k[1]])
                 continue
             if k[0] == 0x09 and (speed_type == 2):
+                new_byte = 1
                 temp.extend([0xFD, 0x09, k[1]])
                 continue
             if k[0] == 0x01:
+                new_byte = 1
                 temp.extend([0xFD, 0x01, k[1], 88])
                 continue
             if k[0] == 0x02:
+                new_byte = 1
                 temp.extend([0xFD, 0x02, k[1], 7])
                 continue
             if k[0] == 0x03 and k[1] == 0:
+                new_byte = 1
                 temp.extend([0xFD, 0x02, 0, 7])
                 continue
             if k[0] == 0x03 and k[1] > 0:
+                new_byte = 1
                 temp.extend([0xFD, 0x03, k[1], max(min(notes.index(str(row.note))+(row.octave*12),127),0)])
                 continue
             if k[0] == 0x04:
+                new_byte = 1
                 temp.extend([0xFD, 0x04, k[1]])
                 continue
             if k[0] == 0x0A:
+                new_byte = 1
                 if k[1] == 0:
                     temp.extend([0xFD, 0x0A, 0])
                 elif k[1] < 0x10:
@@ -115,20 +138,24 @@ def conv_pattern(pattern):
                     temp.extend([0xFD, 0x0A, (k[1]>>4)<<2])
                 continue
             if k[0] == 0xE1:
+                new_byte = 1
                 temp.extend([0xFD, 0xE1, k[1]>>4, k[1]&15])
                 continue
             if k[0] == 0xE2:
+                new_byte = 1
                 temp.extend([0xFD, 0xE2, k[1]>>4, k[1]&15])
                 continue
             if k[0] == 0xE5:
+                new_byte = 1
                 temp.extend([0xFD, 0xE5, k[1]])
                 continue
             if k[0] == 0xEC:
+                new_byte = 1
                 temp.extend([0xFD, 0xEC, k[1]])
                 continue
         temp.append(bit)
         temp.extend(t)
-        if (oldtemp != temp) or (out[-1] > 120) or (len(out) == 0):
+        if new_byte or (out[-1] > 120) or (len(out) == 0):
             out.extend(temp)
             out.append(0)
         oldtemp = temp
@@ -207,6 +234,11 @@ for i in range(len(module.instruments)):
     else:
         f.write(", ")
 
+tfx_have = []
+tfx_off = []
+tfx_arp = []
+tfx_bound = []
+
 for i in range(len(module.instruments)):
     features = module.instruments[i].features
     a = filter(
@@ -224,59 +256,19 @@ for i in range(len(module.instruments)):
     vol = [0x0F,0xFF,0xFF]
 
     insChipType = 0
-    if module.instruments[i].meta.type == InstrumentType.FDS:
-        vol = [0x20,0xFF,0xFF]
-        insChipType = 1
-    if module.instruments[i].meta.type == InstrumentType.FM_OPLL:
-        insChipType = 2
 
     patch_custom = [0]*8
     duty = [0xFF,0xFF]
     duty2 = []
-    if insChipType == 2:
-        patch = 0
-        for j in b:
-            print(j.op_list[0])
-            print(j.op_list[1])
-            patch = j.opll_preset
-            """
-            $00 	TVSK MMMM 	Modulator tremolo (T), vibrato (V), sustain (S), key rate scaling (K), multiplier (M)
-            $01 	TVSK MMMM 	Carrier tremolo (T), vibrato (V), sustain (S), key rate scaling (K), multiplier (M)
-            $02 	KKOO OOOO 	Modulator key level scaling (K), output level (O)
-            $03 	KK-Q WFFF 	Carrier key level scaling (K), unused (-), carrier waveform (Q), modulator waveform (W), feedback (F)
-            $04 	AAAA DDDD 	Modulator attack (A), decay (D)
-            $05 	AAAA DDDD 	Carrier attack (A), decay (D)
-            $06 	SSSS RRRR 	Modulator sustain (S), release (R)
-            $07 	SSSS RRRR 	Carrier sustain (S), release (R)
-            """
-            patch_custom[3] = j.fb&7
-            patch_custom[3] |= (j.ams)<<3
-            patch_custom[3] |= (j.fms)<<4
-            patch_custom[2] = j.op_list[0].tl&63
-            for k in range(2):
-                patch_custom[k] = j.op_list[k].mult&15
-                if j.op_list[k].am:
-                    patch_custom[k] |= 0x80
-                if j.op_list[k].vib:
-                    patch_custom[k] |= 0x40
-                if j.op_list[k].ssg_env:
-                    patch_custom[k] |= 0x20
-                if j.op_list[k].ksr:
-                    patch_custom[k] |= 0x10
-                patch_custom[2+k] |= (j.op_list[k].ksl&3)<<6
-                patch_custom[4+k] = ((j.op_list[k].ar&15)<<4)|(j.op_list[k].dr&15)
-                patch_custom[6+k] = ((j.op_list[k].sl&15)<<4)|(j.op_list[k].rr&15)
-        if patch == 0:
-            duty2 = [0xFE] + patch_custom
-            duty = [0xFE] + patch_custom
-        else:
-            duty2 = []
-            duty = []
-        duty.extend([patch,0xFF,0xFF])
+
     macros = []
     for j in a:
         macros = j.macros
     hasRelTotal = [0,0,0]
+    tfx_have.append(255)
+    tfx_off.append(255)
+    tfx_arp.append(255)
+    tfx_bound.append(255)
     for j in macros:
         kind = j.kind
         if kind == MacroCode.VOL:
@@ -333,7 +325,7 @@ for i in range(len(module.instruments)):
             hasRelTotal[1] = 1
             arp.append(0xFF)
             arp.append(loop)
-        if kind == MacroCode.DUTY and insChipType == 0:
+        if kind == MacroCode.DUTY:
             s = j.speed
             duty = []
             loop = 0xff
@@ -355,31 +347,19 @@ for i in range(len(module.instruments)):
             hasRelTotal[2] = 1
             duty.append(0xFF)
             duty.append(loop)
-        if kind == MacroCode.WAVE and (insChipType == 1 or insChipType == 2):
-            s = j.speed
-            duty = []
-            if insChipType == 2:
-                duty = duty2
-            loop = 0xff
-            loop2 = 0xff
-            hasRel = 0
-            for k in j.data:
-                if k == MacroItem.LOOP:
-                    loop = len(duty)
-                elif k == MacroItem.RELEASE:
-                    loop2 = len(vol)
-                    duty.append(0xFF)
-                    duty.append(loop)
-                    relD.append(len(arp))
-                    hasRel = 1
-                else:
-                    loop2 = len(vol)
-                    duty.append(k)
-            if hasRel == 0:
-                relD.append(len(duty)+1)
-            hasRelTotal[2] = 1
-            duty.append(0xFF)
-            duty.append(loop)
+        if kind == MacroCode.EX6:
+            if len(j.data) > 0:
+                tfx_have[-1] = 1 if j.data[0] > 0 else 0
+        if kind == MacroCode.EX7:
+            if len(j.data) > 0:
+                tfx_off[-1] = (j.data[0]+64)&127
+        if kind == MacroCode.EX8:
+            if len(j.data) > 0:
+                tfx_arp[-1] = (j.data[0]+16)&31
+        if kind == MacroCode.AMS:
+            if len(j.data) > 0:
+                tfx_bound[-1] = j.data[0]&15
+
     if hasRelTotal[0] == 0:
         relV.append(0)
     if hasRelTotal[1] == 0:
@@ -389,12 +369,26 @@ for i in range(len(module.instruments)):
     vol = str(vol)[1:-1]
     duty = str(duty)[1:-1]
     arp = str(arp)[1:-1]
-    f.write("ins"+str(i)+"V:\n")
-    f.write(".byte "+vol+"\n")
-    f.write("ins"+str(i)+"A:\n")
-    f.write(".byte "+arp+"\n")
-    f.write("ins"+str(i)+"D:\n")
-    f.write(".byte "+duty+"\n")
+    if vol in dups:
+        f.write("ins"+str(i)+"V = "+dups[vol]+"\n")
+    else:
+        f.write("ins"+str(i)+"V:\n")
+        f.write(".byte "+vol+"\n")
+        dups[vol] = "ins"+str(i)+"V"
+
+    if arp in dups:
+        f.write("ins"+str(i)+"A = "+dups[arp]+"\n")
+    else:
+        f.write("ins"+str(i)+"A:\n")
+        f.write(".byte "+arp+"\n")
+        dups[arp] = "ins"+str(i)+"A"
+
+    if duty in dups:
+        f.write("ins"+str(i)+"D = "+dups[duty]+"\n")
+    else:
+        f.write("ins"+str(i)+"D:\n")
+        f.write(".byte "+duty+"\n")
+        dups[duty] = "ins"+str(i)+"D"
 
 
 relV = str(relV)[1:-1]
@@ -406,6 +400,15 @@ f.write("insArel:\n")
 f.write(".byte "+relA+"\n")
 f.write("insDrel:\n")
 f.write(".byte "+relD+"\n")
+
+f.write("tfxEn:\n")
+f.write(".byte "+str(tfx_have)[1:-1]+"\n")
+f.write("tfxOff:\n")
+f.write(".byte "+str(tfx_off)[1:-1]+"\n")
+f.write("tfxArp:\n")
+f.write(".byte "+str(tfx_arp)[1:-1]+"\n")
+f.write("tfxBnd:\n")
+f.write(".byte "+str(tfx_bound)[1:-1]+"\n")
 
 for i in range(module.get_num_channels()):
     order = module.subsongs[subsong].order[i]
@@ -421,7 +424,7 @@ for i in range(module.get_num_channels()):
     f.write("order"+str(i)+"H:\n")
     f.write(".byte ")
     for o in range(len(order)):
-        f.write("(>(patCH"+str(i)+"N"+str(order[o])+"-1)&15)")
+        f.write("(>(patCH"+str(i)+"N"+str(order[o])+"-1)&31)")
         if o == len(order)-1:
             f.write("\n")
         else:
@@ -429,33 +432,8 @@ for i in range(module.get_num_channels()):
     f.write("order"+str(i)+"B:\n")
     f.write(".byte ")
     for o in range(len(order)):
-        f.write("(>(patCH"+str(i)+"N"+str(order[o])+"-1)>>4)|")
-        f.write("(^(patCH"+str(i)+"N"+str(order[o])+"-1)<<4&240)&255")
+        f.write("((patCH"+str(i)+"N"+str(order[o])+"-1)>>13)&255")
         if o == len(order)-1:
-            f.write("\n")
-        else:
-            f.write(", ")
-
-if len(module.wavetables) > 0:
-    for i in range(len(module.wavetables)):
-        f.write("wavtbl"+str(i)+":\n")
-        data = module.wavetables[i].data
-        wav = []
-        for j in range(64):
-            k = int((j/63)*(module.wavetables[i].meta.width-1))
-            wav.append(int((data[k]/(module.wavetables[i].meta.height-1))*63))
-        f.write(".byte "+str(wav)[1:-1]+"\n")
-    f.write("wavL:\n.lobytes ")
-    for i in range(len(module.wavetables)):
-        f.write("wavtbl"+str(i))
-        if i == (len(module.wavetables)-1):
-            f.write("\n")
-        else:
-            f.write(", ")
-    f.write("wavH:\n.hibytes ")
-    for i in range(len(module.wavetables)):
-        f.write("wavtbl"+str(i))
-        if i == (len(module.wavetables)-1):
             f.write("\n")
         else:
             f.write(", ")
@@ -589,8 +567,8 @@ if len(module.samples) > 0:
         else:
             f.write(", ")
 
-f.write(".segment \"DATA\"\n")
-f.write(".org $0000\n")
+f.write(".segment \"DATA2\"\n")
+f.write(".org $2000\n")
 
 for i in range(module.get_num_channels()):
     order = module.subsongs[subsong].order[i]
@@ -633,3 +611,41 @@ for i in range(len(module.samples)):
         sample_memory += len(sample)
         f.write("DPCM"+str(i)+":\n.byte "+str(sample)[1:-1]+"\n")
 f.close()
+
+N = (1789773.0/(0x100-0x26))/(260*31.6)
+
+f = open("nsf/lotabl.bin","wb")
+for i in range(2048):
+    fr = 1789773.0/(float(16*(i+1)))
+    fr = int(fr*4*N)
+    #fr = min(fr,32767)
+    f.write(bytearray([fr&0xff]))
+f = open("nsf/hitabl.bin","wb")
+for i in range(2048):
+    fr = 1789773.0/(float(16*(i+1)))
+    fr = int(fr*4*N)
+    #fr = min(fr,32767)
+    f.write(bytearray([fr>>8&0xff]))
+f.close()
+
+tuning = module.meta.tuning
+def makePeriodTable(filename):
+    maxNote = 96
+    relFreqs = [ tuning * (2**(float(i-57)/12.0))
+                for i in range(maxNote)]
+    periods = [int(round(1789773 / (32*freq))) - 1 for freq in relFreqs]
+    with open(filename, 'wt') as outfp:
+        outfp.write("note_table_lo:\n")
+        for i in range(0, maxNote, 12):
+            outfp.write('  .byte '
+                        + ','.join('$%02x' % (i % 256)
+                                   for i in periods[i:i + 12])
+                        + '\n')
+        outfp.write('note_table_hi:\n')
+        for i in range(0, maxNote, 12):
+            outfp.write('  .byte '
+                        + ','.join('$%02x' % (i >> 8)
+                                   for i in periods[i:i + 12])
+                        + '\n')
+
+makePeriodTable("nsf/note_tables.asm")

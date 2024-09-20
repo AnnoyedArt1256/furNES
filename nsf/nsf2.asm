@@ -6,16 +6,37 @@
 .define chnum 5
 
 .segment "INESHDR"
-  .byt "NES",$1A  ; magic signature
-  .byt 32          ; PRG ROM size in 16384 byte units
-  .byt 0          ; CHR ROM size in 8192 byte units
-  .byt $50        ; mirroring type and mapper number lower nibble
-  .byt $50        ; mapper number upper nibble
+	.macro pad32 str
+	 .if (.strlen(str) > 31)
+	  .error "pad32 given too long input"
+	 .endif
+	 .byte str,0
+	 .res 31-.strlen(str)
+	.endmacro
+	
+	.byte "NESM",$1a
+	.byte 2     ; version
+	.byte 1    ; number of songs
+	.byte 1     ; starting song
+	.word $e000 ;;; This is where I was wrong. loadaddr should be the start of the ROM0 segment
+	.word $e000
+	.word nmi_handler
+	;; ....0123456789a123456789b123456789c1
+	pad32 "furNES Test"
+	pad32 "AArt1256"
+	pad32 "2024 AAr1t256"
+	.word 16639 ; Real NTSC rate
+	.byte 0,0,0,0,1,125,126,127 ; disable bankswitching
+	.word 19997	; Real PAL rate
+	.byte 0	; Prefer PAL, compatible with both
+	.byte 0	; no expansion audio
+	.byte 16|32,0,0,0
 
 ;tick_speed = 3
 
 .ZEROPAGE
 .org $10
+init_count: .res 2
 patzp: .res 3
 macroIns: .res 2
 temp_index: .res 2
@@ -145,98 +166,32 @@ KEY_RIGHT  = %00000001
 
 .segment "CODE"
 .org $e000
-  ; The very first thing to do when powering on is to put all sources
-  ; of interrupts into a known state.
-  sei             ; Disable interrupts
-  ldx #$00
-  stx PPUCTRL     ; Disable NMI and set VRAM increment to 32
-  stx PPUMASK     ; Disable rendering
-  stx $4010       ; Disable DMC IRQ
-  dex             ; Subtracting 1 from $00 gives $FF, which is a
-  txs             ; quick way to set the stack pointer to $01FF
-  bit PPUSTATUS   ; Acknowledge stray vblank NMI across reset
-  bit SNDCHN      ; Acknowledge DMC IRQ
-  lda #$40
-  sta P2          ; Disable APU Frame IRQ
-  lda #$0F
-  sta SNDCHN      ; Disable DMC playback, initialize other channels
-
-vwait1:
-  bit PPUSTATUS   ; It takes one full frame for the PPU to become
-  bpl vwait1      ; stable.  Wait for the first frame's vblank.
-
-  ; We have about 29700 cycles to burn until the second frame's
-  ; vblank.  Use this time to get most of the rest of the chipset
-  ; into a known state.
-
-  ; Most versions of the 6502 support a mode where ADC and SBC work
-  ; with binary-coded decimal.  Some 6502-based platforms, such as
-  ; Atari 2600, use this for scorekeeping.  The second-source 6502 in
-  ; the NES ignores the mode setting because its decimal circuit is
-  ; dummied out to save on patent royalties, and games either use
-  ; software BCD routines or convert numbers to decimal every time
-  ; they are displayed.  But some post-patent famiclones have a
-  ; working decimal mode, so turn it off for best compatibility.
-  cld
-
-  ; Clear OAM and the zero page here.
-  ldx #0
-  ; First round the address down to a multiple of 4 so that it won't
-  ; freeze should the address get corrupted.
-  txa
-  and #%11111100
-  tax
-  lda #$FF  ; Any Y value from $EF through $FF will work
+  inc init_count
+  lda init_count
+  cmp #2
+  bcs :+
+  rts
 :
-  sta OAM,x
-  inx
-  inx
-  inx
-  inx
-  bne :-
 
-  ; There are "holy wars" (perennial disagreements) on nesdev over
-  ; whether it's appropriate to zero out RAM in the init code.  Some
-  ; anti-zeroing people say it hides programming errors with reading
-  ; uninitialized memory, and memory will need to be initialized
-  ; again anyway at the start of each level.  Others in favor of
-  ; clearing say that a lot more variables need set to 0 than to any
-  ; other value, and a clear loop like this saves code size.  Still
-  ; others point to the C language, whose specification requires that
-  ; uninitialized variables be set to 0 before main() begins.
-  txa
-clear_zp:
-  sta $00,x
-  inx
-  bne clear_zp
-  
-  ; Other things that can be done here (not shown):
-  ; Set up PRG RAM
-  ; Copy initial high scores, bankswitching trampolines, etc. to RAM
-  ; Set up initial CHR banks
-  ; Set up your sound engine
-
-vwait2:
-  bit PPUSTATUS  ; After the second vblank, we know the PPU has
-  bpl vwait2     ; fully stabilized.
-  
-  ; There are two ways to wait for vertical blanking: spinning on
-  ; bit 7 of PPUSTATUS (as seen above) and waiting for the NMI
-  ; handler to run.  Before the PPU has stabilized, you want to use
-  ; the PPUSTATUS method because NMI might not be reliable.  But
-  ; afterward, you want to use the NMI method because if you read
-  ; PPUSTATUS at the exact moment that the bit turns on, it'll flip
-  ; from off to on to off faster than the CPU can see.
-
-  lda #$26
-  sta $e010
-  lda #%111
-  sta $f000
+	sei
+	lda #0
+	sta $401D
+	; setup IRQ pointer
+	lda #<irq_handler
+	sta $FFFE
+	lda #>irq_handler
+	sta $FFFF
+	; set starting frequency
+	lda #$100-$26 ;<(1789773/8400)
+	sta $401B
+	lda #0 ;>(1789773/8400)
+	sta $401C
+	; begin IRQ
+	lda #1
+	sta $401D
+	cli
  
   jsr initaddr
-  lda #$80
-  sta PPUCTRL
-  cli
 loop:
   lda #0
   sta nmis
@@ -251,7 +206,7 @@ loop:
     lda #$ff
     sta nmis
     pla
-    rti
+    rts
 .endproc
 
 ;.res 256-(*&$ff), 0
@@ -263,9 +218,10 @@ clamp:
 .res 128, 0
 
 .proc irq_handler
-    sta $f010
     sta $fd
     stx $fe
+
+	lda $401D ; acknowledge IRQ
 
 .repeat 2, I
   lda tfx_mode+I
@@ -415,7 +371,10 @@ skipW:
 	inc patzp+2
 skipW:
 	lda patzp+2
-  sta $8000
+  asl
+  sta $5ff8
+  ora #1
+  sta $5ff9
   lda (patzp), y
 .endmacro
 
@@ -1118,7 +1077,10 @@ dpcm_map_skip_end:
   sta patzp+1
   lda (patzp), y
 
-  sta $9000
+  asl
+  sta $5ffc
+  ora #1
+  sta $5ffd
 
   lda #<sampleA
   sta patzp
@@ -1510,7 +1472,7 @@ NOISout:
 
 
   lda #0
-  sta $8008
+  sta $5ffa
 
 .repeat 2, I
   ldx ins+I
@@ -1821,7 +1783,4 @@ timer_arp_mul:
 .segment "DATA1"
 .incbin "lotabl.bin"
 .incbin "hitabl.bin"
-
-.segment "VECTORS"
-.addr nmi_handler, $e000, irq_handler
 
